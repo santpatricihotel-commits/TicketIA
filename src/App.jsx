@@ -12,7 +12,7 @@ import {
   AreaChart, Area, CartesianGrid
 } from 'recharts';
 import Tesseract from 'tesseract.js';
-
+ 
 const CATEGORIES = [
   { id: 'food', name: 'Comida', emoji: '🍽️', color: '#f97316' },
   { id: 'transport', name: 'Transporte', emoji: '🚗', color: '#3b82f6' },

@@ -3,10 +3,6 @@ import {
   getFirestore, collection, addDoc, getDocs,
   deleteDoc, doc, updateDoc, query, orderBy
 } from 'firebase/firestore';
-import {
-  getStorage, ref, uploadBytes, uploadString,
-  getDownloadURL, deleteObject
-} from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: "AIzaSyCKTiet4UmEfOGDwFFbhep7ntGk5rCu_HA",
@@ -19,7 +15,46 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+
+/* ===== COMPRIMIR IMAGEN PARA FIRESTORE (max ~700KB base64) ===== */
+function compressImage(dataUrl, maxSize, quality) {
+  maxSize = maxSize || 600;
+  quality = quality || 0.5;
+  return new Promise(function (resolve) {
+    if (!dataUrl || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+      resolve(null);
+      return;
+    }
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var canvas = document.createElement('canvas');
+        var w = img.naturalWidth || img.width;
+        var h = img.naturalHeight || img.height;
+        var scale = Math.min(1, maxSize / Math.max(w, h));
+        canvas.width = Math.round(w * scale);
+        canvas.height = Math.round(h * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var result = canvas.toDataURL('image/jpeg', quality);
+        if (result.length > 700000) {
+          canvas.width = Math.round(canvas.width * 0.5);
+          canvas.height = Math.round(canvas.height * 0.5);
+          ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          result = canvas.toDataURL('image/jpeg', 0.3);
+        }
+        resolve(result);
+      } catch (e) { resolve(null); }
+    };
+    img.onerror = function () { resolve(null); };
+    img.src = dataUrl;
+  });
+}
 
 /* ===== CARGAR FACTURAS ===== */
 export async function fbLoadReceipts() {
@@ -39,8 +74,7 @@ export async function fbLoadReceipts() {
         taxAmount: data.taxAmount || 0,
         paid: !!data.paid,
         fileType: data.fileType || 'manual',
-        imageData: data.imageUrl || null,
-        imagePath: data.imagePath || null,
+        imageData: data.imageData || data.imageUrl || null,
         ocrText: data.ocrText || '',
       };
     });
@@ -54,41 +88,32 @@ export async function fbLoadReceipts() {
         date: data.date || '', category: data.category || 'other',
         description: data.description || '', invoiceNumber: data.invoiceNumber || '',
         taxAmount: data.taxAmount || 0, paid: !!data.paid, fileType: data.fileType || 'manual',
-        imageData: data.imageUrl || null, imagePath: data.imagePath || null, ocrText: data.ocrText || '',
+        imageData: data.imageData || data.imageUrl || null, ocrText: data.ocrText || '',
       };
     });
   }
 }
 
 /* ===== GUARDAR FACTURA ===== */
-export async function fbSaveReceipt(data, imageFile) {
-  var imageUrl = null;
-  var imagePath = null;
-  var pathId = Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-
-  if (imageFile) {
-    imagePath = 'receipts/' + pathId;
-    var imgRef = ref(storage, imagePath);
-    await uploadBytes(imgRef, imageFile);
-    imageUrl = await getDownloadURL(imgRef);
-  } else if (data.imageData && typeof data.imageData === 'string' && data.imageData.startsWith('data:')) {
-    imagePath = 'receipts/' + pathId;
-    var imgRef2 = ref(storage, imagePath);
-    await uploadString(imgRef2, data.imageData, 'data_url');
-    imageUrl = await getDownloadURL(imgRef2);
-  }
+export async function fbSaveReceipt(data) {
+  var compressed = await compressImage(data.imageData, 600, 0.5);
 
   var docData = {
-    vendor: data.vendor || '', amount: data.amount || 0, date: data.date || '',
-    category: data.category || 'other', description: data.description || '',
-    invoiceNumber: data.invoiceNumber || '', taxAmount: data.taxAmount || 0,
-    paid: !!data.paid, fileType: data.fileType || 'manual',
-    imageUrl: imageUrl, imagePath: imagePath,
+    vendor: data.vendor || '',
+    amount: data.amount || 0,
+    date: data.date || '',
+    category: data.category || 'other',
+    description: data.description || '',
+    invoiceNumber: data.invoiceNumber || '',
+    taxAmount: data.taxAmount || 0,
+    paid: !!data.paid,
+    fileType: data.fileType || 'manual',
+    imageData: compressed,
     ocrText: (data.ocrText || '').substring(0, 5000),
     createdAt: new Date(),
   };
   var docRef = await addDoc(collection(db, 'receipts'), docData);
-  return { firebaseId: docRef.id, imageUrl: imageUrl, imagePath: imagePath };
+  return { firebaseId: docRef.id, imageData: compressed };
 }
 
 /* ===== ACTUALIZAR ===== */
@@ -97,9 +122,6 @@ export async function fbUpdateReceipt(firebaseId, updates) {
 }
 
 /* ===== ELIMINAR ===== */
-export async function fbDeleteReceipt(firebaseId, imagePath) {
+export async function fbDeleteReceipt(firebaseId) {
   await deleteDoc(doc(db, 'receipts', firebaseId));
-  if (imagePath) {
-    try { await deleteObject(ref(storage, imagePath)); } catch (e) { /* ignore */ }
-  }
 }

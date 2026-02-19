@@ -30,21 +30,6 @@ var sampleData = [
   { vendor: 'Restaurante El Buen Sabor', amount: 45.80, date: '2026-02-15', category: 'food', desc: 'Comida de negocios', tax: 9.62, paid: true },
   { vendor: 'Repsol Gasolinera', amount: 65.00, date: '2026-02-14', category: 'transport', desc: 'Combustible', tax: 13.65, paid: true },
   { vendor: 'Amazon Business', amount: 129.99, date: '2026-02-12', category: 'office', desc: 'Material de oficina', tax: 27.30, paid: false },
-  { vendor: 'Movistar', amount: 49.90, date: '2026-02-10', category: 'services', desc: 'Factura mensual internet', tax: 10.48, paid: true },
-  { vendor: 'Hotel NH Madrid', amount: 185.00, date: '2026-02-08', category: 'accommodation', desc: 'Estancia 1 noche Madrid', tax: 38.85, paid: true },
-  { vendor: 'Uber', amount: 12.50, date: '2026-02-08', category: 'transport', desc: 'Trayecto aeropuerto-hotel', tax: 2.63, paid: true },
-  { vendor: 'Mercadona', amount: 78.35, date: '2026-02-06', category: 'food', desc: 'Compra semanal', tax: 7.84, paid: true },
-  { vendor: 'MediaMarkt', amount: 299.00, date: '2026-02-04', category: 'tech', desc: 'Teclado y raton', tax: 62.79, paid: false },
-  { vendor: 'Farmacia Cruz', amount: 15.60, date: '2026-02-03', category: 'health', desc: 'Medicamentos', tax: 1.56, paid: true },
-  { vendor: 'Endesa', amount: 95.40, date: '2026-02-01', category: 'services', desc: 'Factura electrica', tax: 20.03, paid: false },
-  { vendor: 'Vueling', amount: 156.00, date: '2026-01-28', category: 'travel', desc: 'Vuelo BCN-MAD', tax: 32.76, paid: true },
-  { vendor: 'Zara', amount: 89.90, date: '2026-01-25', category: 'shopping', desc: 'Ropa de trabajo', tax: 18.88, paid: true },
-  { vendor: 'Bar La Tasca', amount: 32.50, date: '2026-01-22', category: 'food', desc: 'Cena con equipo', tax: 6.83, paid: true },
-  { vendor: 'Renfe', amount: 45.00, date: '2026-01-20', category: 'transport', desc: 'AVE Madrid-Barcelona', tax: 9.45, paid: true },
-  { vendor: 'Naturgy', amount: 68.20, date: '2026-01-15', category: 'services', desc: 'Factura gas enero', tax: 14.32, paid: true },
-  { vendor: 'FNAC', amount: 24.95, date: '2026-01-10', category: 'tech', desc: 'Funda tablet', tax: 5.24, paid: true },
-  { vendor: 'Carrefour', amount: 92.15, date: '2026-01-08', category: 'food', desc: 'Compra quincenal', tax: 9.22, paid: true },
-  { vendor: 'Clinica Dental', amount: 120.00, date: '2026-01-05', category: 'health', desc: 'Revision dental', tax: 0, paid: false },
 ];
 
 var initReceipts = sampleData.map(function (item, i) {

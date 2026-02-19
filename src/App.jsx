@@ -30,6 +30,21 @@ var sampleData = [
   { vendor: 'Restaurante El Buen Sabor', amount: 45.80, date: '2026-02-15', category: 'food', desc: 'Comida de negocios', tax: 9.62, paid: true },
   { vendor: 'Repsol Gasolinera', amount: 65.00, date: '2026-02-14', category: 'transport', desc: 'Combustible', tax: 13.65, paid: true },
   { vendor: 'Amazon Business', amount: 129.99, date: '2026-02-12', category: 'office', desc: 'Material de oficina', tax: 27.30, paid: false },
+  { vendor: 'Movistar', amount: 49.90, date: '2026-02-10', category: 'services', desc: 'Factura mensual internet', tax: 10.48, paid: true },
+  { vendor: 'Hotel NH Madrid', amount: 185.00, date: '2026-02-08', category: 'accommodation', desc: 'Estancia 1 noche Madrid', tax: 38.85, paid: true },
+  { vendor: 'Uber', amount: 12.50, date: '2026-02-08', category: 'transport', desc: 'Trayecto aeropuerto-hotel', tax: 2.63, paid: true },
+  { vendor: 'Mercadona', amount: 78.35, date: '2026-02-06', category: 'food', desc: 'Compra semanal', tax: 7.84, paid: true },
+  { vendor: 'MediaMarkt', amount: 299.00, date: '2026-02-04', category: 'tech', desc: 'Teclado y raton', tax: 62.79, paid: false },
+  { vendor: 'Farmacia Cruz', amount: 15.60, date: '2026-02-03', category: 'health', desc: 'Medicamentos', tax: 1.56, paid: true },
+  { vendor: 'Endesa', amount: 95.40, date: '2026-02-01', category: 'services', desc: 'Factura electrica', tax: 20.03, paid: false },
+  { vendor: 'Vueling', amount: 156.00, date: '2026-01-28', category: 'travel', desc: 'Vuelo BCN-MAD', tax: 32.76, paid: true },
+  { vendor: 'Zara', amount: 89.90, date: '2026-01-25', category: 'shopping', desc: 'Ropa de trabajo', tax: 18.88, paid: true },
+  { vendor: 'Bar La Tasca', amount: 32.50, date: '2026-01-22', category: 'food', desc: 'Cena con equipo', tax: 6.83, paid: true },
+  { vendor: 'Renfe', amount: 45.00, date: '2026-01-20', category: 'transport', desc: 'AVE Madrid-Barcelona', tax: 9.45, paid: true },
+  { vendor: 'Naturgy', amount: 68.20, date: '2026-01-15', category: 'services', desc: 'Factura gas enero', tax: 14.32, paid: true },
+  { vendor: 'FNAC', amount: 24.95, date: '2026-01-10', category: 'tech', desc: 'Funda tablet', tax: 5.24, paid: true },
+  { vendor: 'Carrefour', amount: 92.15, date: '2026-01-08', category: 'food', desc: 'Compra quincenal', tax: 9.22, paid: true },
+  { vendor: 'Clinica Dental', amount: 120.00, date: '2026-01-05', category: 'health', desc: 'Revision dental', tax: 0, paid: false },
 ];
 
 var initReceipts = sampleData.map(function (item, i) {
@@ -50,101 +65,57 @@ function preprocessImage(dataUrl) {
   return new Promise(function (resolve) {
     var img = new Image();
     img.onload = function () {
-      var canvas = document.createElement('canvas');
-      var MAX = 2000;
-      var sc = Math.min(1, MAX / Math.max(img.width, img.height));
-      if (Math.max(img.width, img.height) < 1000) sc = 2;
-      canvas.width = Math.round(img.width * sc);
-      canvas.height = Math.round(img.height * sc);
-      var ctx = canvas.getContext('2d');
-      ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      var d = imgData.data;
-      for (var i = 0; i < d.length; i += 4) {
-        var gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
-        var enhanced = ((gray - 128) * 1.6) + 128;
-        enhanced = Math.min(255, Math.max(0, enhanced));
-        d[i] = enhanced; d[i + 1] = enhanced; d[i + 2] = enhanced;
+      try {
+        var canvas = document.createElement('canvas');
+        var MAX = 2000;
+        var sc = Math.min(1, MAX / Math.max(img.width, img.height));
+        if (Math.max(img.width, img.height) < 800) sc = Math.min(2, 1600 / Math.max(img.width, img.height));
+        canvas.width = Math.round(img.width * sc);
+        canvas.height = Math.round(img.height * sc);
+        var ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        var d = imgData.data;
+        for (var i = 0; i < d.length; i += 4) {
+          var gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+          var enhanced = ((gray - 128) * 1.5) + 128;
+          enhanced = Math.min(255, Math.max(0, enhanced));
+          d[i] = enhanced; d[i + 1] = enhanced; d[i + 2] = enhanced;
+        }
+        ctx.putImageData(imgData, 0, 0);
+        resolve(canvas.toDataURL('image/png'));
+      } catch (err) {
+        resolve(dataUrl);
       }
-      ctx.putImageData(imgData, 0, 0);
-      resolve(canvas.toDataURL('image/png'));
     };
     img.onerror = function () { resolve(dataUrl); };
     img.src = dataUrl;
   });
 }
 
-/* ===== PDF: Cargar pdf.js desde CDN (no necesita npm install) ===== */
+/* ===== CARGAR PDF.JS DESDE CDN ===== */
 function loadPdfJs() {
   return new Promise(function (resolve, reject) {
     if (window.pdfjsLib) { resolve(window.pdfjsLib); return; }
+    var timer = setTimeout(function () { reject(new Error('Timeout cargando PDF.js')); }, 20000);
     var script = document.createElement('script');
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
     script.onload = function () {
-      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-      resolve(window.pdfjsLib);
+      clearTimeout(timer);
+      try {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        resolve(window.pdfjsLib);
+      } catch (err) { reject(err); }
     };
-    script.onerror = function () { reject(new Error('No se pudo cargar pdf.js')); };
+    script.onerror = function () { clearTimeout(timer); reject(new Error('No se pudo cargar PDF.js')); };
     document.head.appendChild(script);
   });
 }
 
-function extractTextFromPdf(dataUrl) {
-  return loadPdfJs().then(function (pdfjsLib) {
-    var base64 = dataUrl.split(',')[1];
-    var binary = atob(base64);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return pdfjsLib.getDocument({ data: bytes }).promise;
-  }).then(function (pdf) {
-    var pagePromises = [];
-    for (var p = 1; p <= Math.min(pdf.numPages, 3); p++) {
-      pagePromises.push(
-        pdf.getPage(p).then(function (page) {
-          return page.getTextContent().then(function (tc) {
-            var lastY = null; var text = '';
-            tc.items.forEach(function (item) {
-              if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) text += '\n';
-              text += item.str + ' ';
-              lastY = item.transform[5];
-            });
-            return text;
-          });
-        })
-      );
-    }
-    return Promise.all(pagePromises).then(function (texts) { return texts.join('\n'); });
-  });
-}
-
-function pdfToImage(dataUrl) {
-  return loadPdfJs().then(function (pdfjsLib) {
-    var base64 = dataUrl.split(',')[1];
-    var binary = atob(base64);
-    var bytes = new Uint8Array(binary.length);
-    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return pdfjsLib.getDocument({ data: bytes }).promise;
-  }).then(function (pdf) {
-    return pdf.getPage(1);
-  }).then(function (page) {
-    var scale = 2;
-    var viewport = page.getViewport({ scale: scale });
-    var canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    var ctx = canvas.getContext('2d');
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
-      return canvas.toDataURL('image/jpeg', 0.92);
-    });
-  });
-}
-
-/* ===== PARSER OCR MEJORADO ===== */
+/* ===== PARSER OCR ===== */
 function parseOCRText(text) {
   if (!text || text.trim().length < 3) {
     return { vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0 };
@@ -154,7 +125,6 @@ function parseOCRText(text) {
   var lt = fullText.toLowerCase();
   var result = { vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0 };
 
-  /* --- 1) PROVEEDOR: base de datos de marcas conocidas --- */
   var knownBrands = [
     { kw: ['vueling'], vendor: 'Vueling', cat: 'travel' },
     { kw: ['ryanair'], vendor: 'Ryanair', cat: 'travel' },
@@ -162,20 +132,14 @@ function parseOCRText(text) {
     { kw: ['air europa'], vendor: 'Air Europa', cat: 'travel' },
     { kw: ['easyjet'], vendor: 'EasyJet', cat: 'travel' },
     { kw: ['volotea'], vendor: 'Volotea', cat: 'travel' },
-    { kw: ['air nostrum'], vendor: 'Air Nostrum', cat: 'travel' },
-    { kw: ['transavia'], vendor: 'Transavia', cat: 'travel' },
-    { kw: ['wizzair', 'wizz air'], vendor: 'Wizz Air', cat: 'travel' },
-    { kw: ['norwegian'], vendor: 'Norwegian', cat: 'travel' },
     { kw: ['renfe'], vendor: 'Renfe', cat: 'transport' },
     { kw: ['uber'], vendor: 'Uber', cat: 'transport' },
     { kw: ['cabify'], vendor: 'Cabify', cat: 'transport' },
-    { kw: ['bolt'], vendor: 'Bolt', cat: 'transport' },
     { kw: ['repsol'], vendor: 'Repsol', cat: 'transport' },
     { kw: ['cepsa'], vendor: 'Cepsa', cat: 'transport' },
     { kw: ['shell'], vendor: 'Shell', cat: 'transport' },
     { kw: ['galp'], vendor: 'Galp', cat: 'transport' },
     { kw: ['alsa'], vendor: 'Alsa', cat: 'transport' },
-    { kw: ['blablacar'], vendor: 'BlaBlaCar', cat: 'transport' },
     { kw: ['mercadona'], vendor: 'Mercadona', cat: 'food' },
     { kw: ['carrefour'], vendor: 'Carrefour', cat: 'food' },
     { kw: ['lidl'], vendor: 'Lidl', cat: 'food' },
@@ -183,36 +147,30 @@ function parseOCRText(text) {
     { kw: ['eroski'], vendor: 'Eroski', cat: 'food' },
     { kw: ['alcampo'], vendor: 'Alcampo', cat: 'food' },
     { kw: ['consum '], vendor: 'Consum', cat: 'food' },
-    { kw: ['bonpreu'], vendor: 'Bonpreu', cat: 'food' },
-    { kw: ['condis'], vendor: 'Condis', cat: 'food' },
     { kw: ['mediamarkt', 'media markt'], vendor: 'MediaMarkt', cat: 'tech' },
     { kw: ['fnac'], vendor: 'FNAC', cat: 'tech' },
     { kw: ['pccomponentes', 'pc componentes'], vendor: 'PcComponentes', cat: 'tech' },
     { kw: ['apple store', 'apple.com'], vendor: 'Apple', cat: 'tech' },
-    { kw: ['samsung'], vendor: 'Samsung', cat: 'tech' },
     { kw: ['movistar'], vendor: 'Movistar', cat: 'services' },
     { kw: ['vodafone'], vendor: 'Vodafone', cat: 'services' },
     { kw: ['orange'], vendor: 'Orange', cat: 'services' },
     { kw: ['jazztel'], vendor: 'Jazztel', cat: 'services' },
-    { kw: ['digi '], vendor: 'Digi', cat: 'services' },
     { kw: ['endesa'], vendor: 'Endesa', cat: 'services' },
     { kw: ['naturgy'], vendor: 'Naturgy', cat: 'services' },
     { kw: ['iberdrola'], vendor: 'Iberdrola', cat: 'services' },
     { kw: ['booking.com'], vendor: 'Booking.com', cat: 'accommodation' },
     { kw: ['airbnb'], vendor: 'Airbnb', cat: 'accommodation' },
     { kw: ['nh hotel', 'hotel nh'], vendor: 'NH Hotels', cat: 'accommodation' },
-    { kw: ['melia', 'meliá'], vendor: 'Meliá', cat: 'accommodation' },
+    { kw: ['melia'], vendor: 'Melia', cat: 'accommodation' },
     { kw: ['zara '], vendor: 'Zara', cat: 'shopping' },
     { kw: ['primark'], vendor: 'Primark', cat: 'shopping' },
-    { kw: ['corte ingles', 'corte inglés', 'el corte'], vendor: 'El Corte Inglés', cat: 'shopping' },
+    { kw: ['corte ingles', 'el corte'], vendor: 'El Corte Ingles', cat: 'shopping' },
     { kw: ['decathlon'], vendor: 'Decathlon', cat: 'shopping' },
     { kw: ['ikea'], vendor: 'IKEA', cat: 'shopping' },
-    { kw: ['leroy merlin'], vendor: 'Leroy Merlin', cat: 'shopping' },
     { kw: ['amazon'], vendor: 'Amazon', cat: 'shopping' },
     { kw: ['mcdon', 'mcdonald'], vendor: "McDonald's", cat: 'food' },
     { kw: ['burger king'], vendor: 'Burger King', cat: 'food' },
     { kw: ['telepizza'], vendor: 'Telepizza', cat: 'food' },
-    { kw: ['just eat', 'justeat'], vendor: 'Just Eat', cat: 'food' },
     { kw: ['glovo'], vendor: 'Glovo', cat: 'food' },
     { kw: ['deliveroo'], vendor: 'Deliveroo', cat: 'food' },
     { kw: ['farmacia'], vendor: 'Farmacia', cat: 'health' },
@@ -233,35 +191,22 @@ function parseOCRText(text) {
   }
 
   if (!result.vendor) {
-    var skipPat = [
-      /^\d+$/, /^(fecha|date|hora|time|total|iva|nif|cif|tel|fax|email|web|www|http|dir)/i,
-      /^(invoice|factura|ticket|recibo|albaran|presupuesto)\s/i,
-      /^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/,
-      /^[A-Z0-9]{2,3}[\-\/]\d+/,
-      /^(name|nombre|address|direccion|town|city|phone|vat\s*number|purchase)/i,
-    ];
     for (var vi = 0; vi < Math.min(lines.length, 15); vi++) {
       var cl = lines[vi].replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑüÜ\s\-\.&]/g, '').trim();
       if (cl.length < 2 || cl.length > 60) continue;
-      var skip = false;
-      for (var si = 0; si < skipPat.length; si++) {
-        if (skipPat[si].test(lines[vi].trim())) { skip = true; break; }
-      }
-      if (skip) continue;
+      if (/^\d+$/.test(lines[vi].trim())) continue;
+      if (/^(fecha|date|hora|time|total|iva|nif|cif|tel|fax|email|web|www|http|dir|invoice|factura|ticket|recibo)/i.test(lines[vi].trim())) continue;
+      if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(lines[vi].trim())) continue;
       if ((cl.match(/[a-zA-ZáéíóúñÁÉÍÓÚÑ]/g) || []).length < 2) continue;
       result.vendor = cl;
       break;
     }
   }
 
-  /* --- 2) IMPORTE TOTAL --- */
   var totalAmounts = [];
-
-  // Buscar lineas con palabra "total" y sacar el mayor importe de esa linea
   for (var tli = 0; tli < lines.length; tli++) {
-    var tline = lines[tli];
-    if (/\btotal\b/i.test(tline) && !/\btotal\s*(fare|charges|fees)\b/i.test(tline)) {
-      var amtsInLine = tline.match(/(\d{1,6}[.,]\d{2})/g);
+    if (/\btotal\b/i.test(lines[tli])) {
+      var amtsInLine = lines[tli].match(/(\d{1,6}[.,]\d{2})/g);
       if (amtsInLine) {
         for (var ai = 0; ai < amtsInLine.length; ai++) {
           var av = parseFloat(amtsInLine[ai].replace(',', '.'));
@@ -270,10 +215,8 @@ function parseOCRText(text) {
       }
     }
   }
-
-  // Regex directos
   var totalRegexes = [
-    /(?:total|importe\s*total|grand\s*total|a\s*pagar|total\s*factura|amount\s*due)[:\s]*(\d{1,6}[.,]\d{2})/gi,
+    /(?:total|importe\s*total|a\s*pagar|amount\s*due)[:\s]*(\d{1,6}[.,]\d{2})/gi,
     /(\d{1,6}[.,]\d{2})\s*(?:EUR|€)?\s*(?:total|a\s*pagar)/gi,
   ];
   for (var tr = 0; tr < totalRegexes.length; tr++) {
@@ -283,7 +226,6 @@ function parseOCRText(text) {
       if (tv > 0.5 && tv < 100000) totalAmounts.push(tv);
     }
   }
-
   if (totalAmounts.length > 0) {
     result.amount = Math.max.apply(null, totalAmounts);
   } else {
@@ -303,7 +245,6 @@ function parseOCRText(text) {
     if (allAmounts.length > 0) result.amount = Math.max.apply(null, allAmounts);
   }
 
-  /* --- 3) IVA / VAT --- */
   var taxAmounts = [];
   var taxPatterns = [
     /(?:iva|i\.v\.a|vat|tax|impuesto)[:\s]*(\d{1,6}[.,]\d{2})/gi,
@@ -312,34 +253,16 @@ function parseOCRText(text) {
   for (var txp = 0; txp < taxPatterns.length; txp++) {
     var txm;
     while ((txm = taxPatterns[txp].exec(fullText)) !== null) {
-      var txv = parseFloat(txm[1].replace(',', '.'));
-      if (txv > 0) taxAmounts.push(txv);
-    }
-  }
-  for (var txi = 0; txi < lines.length; txi++) {
-    var txline = lines[txi];
-    if (/(?:\biva\b|\bvat\b|\btax\b)/i.test(txline) && !/(?:vat\s*number|numero|nif|cif|n[°ºo]\s*iva)/i.test(txline)) {
-      var txInLine = txline.match(/(\d{1,6}[.,]\d{2})/g);
-      if (txInLine) {
-        for (var txa = 0; txa < txInLine.length; txa++) {
-          var txVal = parseFloat(txInLine[txa].replace(',', '.'));
-          if (txVal > 0) taxAmounts.push(txVal);
-        }
-      }
+      taxAmounts.push(parseFloat(txm[1].replace(',', '.')));
     }
   }
   if (taxAmounts.length > 0) {
     var validTax = taxAmounts.filter(function (t) { return t < result.amount * 0.5 && t > 0; });
-    if (validTax.length > 0) {
-      result.taxAmount = Math.max.apply(null, validTax);
-    } else if (taxAmounts.length > 0) {
-      result.taxAmount = Math.min.apply(null, taxAmounts);
-    }
+    result.taxAmount = validTax.length > 0 ? Math.max.apply(null, validTax) : Math.min.apply(null, taxAmounts);
   } else if (result.amount > 0) {
     result.taxAmount = parseFloat((result.amount * 0.21 / 1.21).toFixed(2));
   }
 
-  /* --- 4) FECHA --- */
   var dateRegex = /(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/g;
   var dm;
   while ((dm = dateRegex.exec(fullText)) !== null) {
@@ -352,9 +275,8 @@ function parseOCRText(text) {
     }
   }
 
-  /* --- 5) NUMERO FACTURA --- */
   var invPatterns = [
-    /(?:invoice|factura|fra|ticket|n[°ºo]|num|receipt|albaran|ref)[.:\s#]*([A-Z0-9][\w\-\/]{4,})/i,
+    /(?:invoice|factura|fra|ticket|n[°ºo]|num|receipt|ref)[.:\s#]*([A-Z0-9][\w\-\/]{4,})/i,
     /([A-Z]{1,4}\d{6,})/,
     /([A-Z]{1,3}[\-\/]\d{3,})/,
   ];
@@ -364,18 +286,17 @@ function parseOCRText(text) {
   }
   if (!result.invoiceNumber) result.invoiceNumber = 'T-' + Date.now().toString().slice(-6);
 
-  /* --- 6) AUTO-CATEGORIA si no se detecto por marca --- */
   if (!brandFound) {
     var kwMap = {
-      food: ['restaurante', 'bar ', 'cafeteria', 'mercadona', 'carrefour', 'supermercado', 'alimentacion', 'comida', 'menu', 'cafe', 'lidl', ' dia ', 'aldi', 'burger', 'pizza', 'kebab', 'mcdon', 'telepizza', 'just eat', 'glovo', 'deliveroo'],
-      transport: ['gasolinera', 'repsol', ' bp ', 'cepsa', 'uber', 'cabify', 'taxi', 'combustible', 'gasolina', 'diesel', 'parking', 'aparcamiento', 'shell', 'galp', 'renfe', 'tren', 'autobus'],
-      accommodation: ['hotel', 'hostal', 'alojamiento', 'airbnb', 'booking', 'habitacion', 'pension'],
-      office: ['oficina', 'papeleria', 'material oficina', 'amazon', 'staples'],
-      tech: ['mediamarkt', 'fnac', 'apple', 'samsung', 'pc componentes', 'electronica', 'informatica', 'movil', 'portatil', 'phone house'],
-      health: ['farmacia', 'clinica', 'dental', 'optica', 'medico', 'salud', 'hospital', 'parafarmacia'],
-      travel: ['vueling', 'iberia', 'ryanair', 'vuelo', 'billete', 'avion', 'flight', 'boarding', 'airline', 'air europa', 'easyjet', 'volotea', 'bcn-', '-bcn', 'mad-', '-mad', 'departure', 'tktt'],
-      shopping: ['zara', 'primark', 'corte ingles', 'mango', 'h&m', 'ropa', 'tienda', 'boutique', 'decathlon', 'ikea', 'leroy merlin'],
-      services: ['movistar', 'vodafone', 'orange', 'endesa', 'naturgy', 'iberdrola', 'telefon', 'internet', 'luz', 'gas', 'agua', 'seguro', 'jazztel', 'digi'],
+      food: ['restaurante', 'bar ', 'cafeteria', 'supermercado', 'alimentacion', 'comida', 'menu', 'cafe'],
+      transport: ['gasolinera', 'combustible', 'gasolina', 'diesel', 'parking', 'taxi'],
+      accommodation: ['hotel', 'hostal', 'alojamiento', 'habitacion'],
+      office: ['oficina', 'papeleria', 'material oficina'],
+      tech: ['electronica', 'informatica', 'movil', 'portatil'],
+      health: ['farmacia', 'clinica', 'dental', 'optica', 'medico', 'salud', 'hospital'],
+      travel: ['vuelo', 'billete', 'avion', 'flight', 'boarding', 'airline', 'departure'],
+      shopping: ['ropa', 'tienda', 'boutique'],
+      services: ['telefon', 'internet', 'luz', 'gas', 'agua', 'seguro', 'factura mensual'],
     };
     var catKeys = Object.keys(kwMap);
     outer: for (var ci = 0; ci < catKeys.length; ci++) {
@@ -415,7 +336,17 @@ export default function App() {
     setTimeout(function () { setNotification(null); }, 3500);
   };
 
-  /* ===== ESCANEO OCR ===== */
+  /* ===== FORMULARIO MANUAL (fallback) ===== */
+  var openManualForm = function (fileName, fileType) {
+    setEditForm({
+      vendor: '', amount: 0, date: new Date().toISOString().split('T')[0],
+      category: 'other', description: '', invoiceNumber: 'T-' + Date.now().toString().slice(-6),
+      taxAmount: 0, paid: false, fileType: fileType || 'manual', fileName: fileName || '',
+      imageData: null, ocrText: '',
+    });
+  };
+
+  /* ===== OCR REAL ===== */
   var realAIScan = async function (imageData, fileName, fileType) {
     setIsScanning(true);
     setScanProgress(0);
@@ -428,14 +359,14 @@ export default function App() {
       setScanProgress(10);
       setScanStatus('Iniciando motor OCR...');
 
-      var worker = await createWorker('spa+eng', 1, {
+      var worker = await createWorker('spa', 1, {
         logger: function (info) {
           if (info.status === 'recognizing text') {
             setScanProgress(25 + Math.round(info.progress * 60));
             setScanStatus('Leyendo texto... ' + Math.round(info.progress * 100) + '%');
           } else if (info.status === 'loading language traineddata') {
             setScanProgress(10 + Math.round(info.progress * 15));
-            setScanStatus('Descargando idiomas (solo 1a vez)...');
+            setScanStatus('Descargando idioma (solo 1a vez)...');
           } else if (info.status === 'initializing api') {
             setScanProgress(22);
             setScanStatus('Inicializando...');
@@ -473,7 +404,6 @@ export default function App() {
       }, 600);
 
     } catch (err) {
-      console.error('OCR Error:', err);
       setEditForm({
         vendor: '', amount: 0, date: new Date().toISOString().split('T')[0],
         category: 'other', description: '', invoiceNumber: 'T-' + Date.now().toString().slice(-6),
@@ -485,101 +415,124 @@ export default function App() {
     }
   };
 
-  /* ===== SUBIR ARCHIVO (IMAGENES + PDF) ===== */
+  /* ===== PROCESAR PDF ===== */
+  var processPdf = function (dataUrl, fileName) {
+    setIsScanning(true);
+    setScanProgress(5);
+    setScanStatus('Cargando lector PDF...');
+
+    var timeout = setTimeout(function () {
+      setIsScanning(false); setScanProgress(0); setScanStatus('');
+      openManualForm(fileName, 'pdf');
+      showNotif('PDF tardo demasiado. Introduce datos manualmente.');
+    }, 30000);
+
+    loadPdfJs().then(function (pdfjsLib) {
+      setScanProgress(15);
+      setScanStatus('Abriendo PDF...');
+      var base64 = dataUrl.split(',')[1];
+      var binary = atob(base64);
+      var bytes = new Uint8Array(binary.length);
+      for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return pdfjsLib.getDocument({ data: bytes }).promise;
+    }).then(function (pdf) {
+      setScanProgress(25);
+      setScanStatus('Leyendo pagina 1...');
+      return pdf.getPage(1);
+    }).then(function (page) {
+      var scale = 2;
+      var viewport = page.getViewport({ scale: scale });
+      var canvas = document.createElement('canvas');
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      var ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        var imageUrl = canvas.toDataURL('image/jpeg', 0.9);
+        return page.getTextContent().then(function (tc) {
+          var pdfText = '';
+          var lastY = null;
+          tc.items.forEach(function (item) {
+            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) pdfText += '\n';
+            pdfText += item.str + ' ';
+            lastY = item.transform[5];
+          });
+          return { image: imageUrl, text: pdfText };
+        }).catch(function () {
+          return { image: imageUrl, text: '' };
+        });
+      });
+    }).then(function (result) {
+      clearTimeout(timeout);
+
+      if (result.text && result.text.trim().length > 20) {
+        setScanProgress(80);
+        setScanStatus('Analizando texto del PDF...');
+        var parsed = parseOCRText(result.text);
+        setScanProgress(100);
+        setScanStatus('Completado!');
+        setTimeout(function () {
+          setEditForm({
+            vendor: parsed.vendor, amount: parsed.amount, date: parsed.date,
+            category: parsed.category, description: parsed.description,
+            invoiceNumber: parsed.invoiceNumber, taxAmount: parsed.taxAmount,
+            paid: false, fileType: 'pdf', fileName: fileName,
+            imageData: result.image, ocrText: result.text,
+          });
+          setIsScanning(false); setScanProgress(0); setScanStatus('');
+          showNotif('PDF leido! Revisa los datos.');
+        }, 400);
+      } else {
+        setScanProgress(30);
+        setScanStatus('PDF sin texto, escaneando imagen...');
+        setIsScanning(false);
+        realAIScan(result.image, fileName, 'pdf');
+      }
+    }).catch(function (err) {
+      clearTimeout(timeout);
+      setIsScanning(false); setScanProgress(0); setScanStatus('');
+      openManualForm(fileName, 'pdf');
+      showNotif('Error con PDF: introduce datos manualmente.');
+    });
+  };
+
+  /* ===== SUBIR ARCHIVO ===== */
   var handleFileUpload = function (e) {
     var file = e.target.files && e.target.files[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      showNotif('Archivo demasiado grande (max 20MB)');
+    var name = file.name || 'archivo';
+    showNotif('Archivo recibido: ' + name.substring(0, 25));
+
+    if (file.size > 15 * 1024 * 1024) {
+      showNotif('Archivo muy grande (max 15MB)');
       e.target.value = '';
       return;
     }
 
+    var isPDF = file.type === 'application/pdf' || name.toLowerCase().indexOf('.pdf') !== -1;
+
     var reader = new FileReader();
     reader.onload = function (ev) {
-      var dataUrl = ev.target.result;
-      var isPDF = file.type === 'application/pdf' || file.name.toLowerCase().indexOf('.pdf') !== -1;
-
-      if (isPDF) {
-        /* --- PDF: extraer texto directo, si no hay texto → OCR --- */
-        setIsScanning(true);
-        setScanProgress(3);
-        setScanStatus('Cargando lector de PDF...');
-
-        extractTextFromPdf(dataUrl).then(function (pdfText) {
-          if (pdfText && pdfText.trim().length > 20) {
-            setScanProgress(60);
-            setScanStatus('Texto extraido del PDF, analizando...');
-            var parsed = parseOCRText(pdfText);
-
-            return pdfToImage(dataUrl).then(function (pdfImage) {
-              setScanProgress(100);
-              setScanStatus('Completado!');
-              setTimeout(function () {
-                setEditForm({
-                  vendor: parsed.vendor, amount: parsed.amount, date: parsed.date,
-                  category: parsed.category, description: parsed.description,
-                  invoiceNumber: parsed.invoiceNumber, taxAmount: parsed.taxAmount,
-                  paid: false, fileType: 'pdf', fileName: file.name,
-                  imageData: pdfImage, ocrText: pdfText,
-                });
-                setIsScanning(false); setScanProgress(0); setScanStatus('');
-                showNotif('PDF leido! (' + pdfText.trim().split(/\s+/).length + ' palabras). Revisa datos.');
-              }, 500);
-            }).catch(function () {
-              setTimeout(function () {
-                setEditForm({
-                  vendor: parsed.vendor, amount: parsed.amount, date: parsed.date,
-                  category: parsed.category, description: parsed.description,
-                  invoiceNumber: parsed.invoiceNumber, taxAmount: parsed.taxAmount,
-                  paid: false, fileType: 'pdf', fileName: file.name,
-                  imageData: null, ocrText: pdfText,
-                });
-                setIsScanning(false); setScanProgress(0); setScanStatus('');
-                showNotif('PDF leido (sin vista previa). Revisa datos.');
-              }, 500);
-            });
-          } else {
-            setScanProgress(10);
-            setScanStatus('PDF sin texto, convirtiendo a imagen...');
-            return pdfToImage(dataUrl).then(function (pdfImage) {
-              setScanProgress(15);
-              setScanStatus('Imagen lista, escaneando con OCR...');
-              realAIScan(pdfImage, file.name, 'pdf');
-            });
-          }
-        }).catch(function (err) {
-          console.error('PDF error:', err);
-          setIsScanning(false); setScanProgress(0); setScanStatus('');
-          setEditForm({
-            vendor: '', amount: 0, date: new Date().toISOString().split('T')[0],
-            category: 'other', description: '', invoiceNumber: 'T-' + Date.now().toString().slice(-6),
-            taxAmount: 0, paid: false, fileType: 'pdf', fileName: file.name,
-            imageData: null, ocrText: '',
-          });
-          showNotif('Error leyendo PDF. Introduce datos manualmente.');
-        });
-
-      } else {
-        /* --- Imagen: limpiar a JPEG y escanear --- */
-        var img = new Image();
-        img.onload = function () {
-          var canvas = document.createElement('canvas');
-          canvas.width = img.width;
-          canvas.height = img.height;
-          var ctx = canvas.getContext('2d');
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
-          var cleanJpeg = canvas.toDataURL('image/jpeg', 0.95);
-          realAIScan(cleanJpeg, file.name, 'jpg');
-        };
-        img.onerror = function () {
-          realAIScan(dataUrl, file.name, 'jpg');
-        };
-        img.src = dataUrl;
+      try {
+        var dataUrl = ev.target.result;
+        if (!dataUrl || dataUrl.length < 100) {
+          showNotif('Error: archivo vacio o corrupto');
+          return;
+        }
+        if (isPDF) {
+          processPdf(dataUrl, name);
+        } else {
+          realAIScan(dataUrl, name, 'jpg');
+        }
+      } catch (err) {
+        showNotif('Error procesando archivo. Prueba manualmente.');
+        openManualForm(name);
       }
+    };
+    reader.onerror = function () {
+      showNotif('Error leyendo archivo');
     };
     reader.readAsDataURL(file);
     e.target.value = '';
@@ -789,13 +742,13 @@ export default function App() {
                     <span className="text-indigo-200 text-xs mt-1">Camara del movil</span>
                   </motion.button>
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileUpload} />
-                  <motion.div whileTap={{ scale: 0.98 }} onClick={function () { fileInputRef.current && fileInputRef.current.click(); }} className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center cursor-pointer hover:border-indigo-400 transition-colors">
+                  <motion.button whileTap={{ scale: 0.98 }} onClick={function () { fileInputRef.current && fileInputRef.current.click(); }} className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center hover:border-indigo-400 transition-colors">
                     <Upload size={32} className="text-gray-400 mb-3" />
                     <span className="font-medium text-gray-600 text-sm">Subir archivo</span>
                     <span className="text-gray-400 text-xs mt-1">JPG, PNG o PDF</span>
-                  </motion.div>
+                  </motion.button>
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf,application/pdf" className="hidden" onChange={handleFileUpload} />
-                  <button onClick={function () { setEditForm({ vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0, paid: false, fileType: 'manual', imageData: null, ocrText: '' }); }} className="w-full mt-4 py-3 text-indigo-600 font-medium text-sm border border-indigo-200 rounded-xl">
+                  <button onClick={function () { openManualForm('', 'manual'); }} className="w-full mt-4 py-3 text-indigo-600 font-medium text-sm border border-indigo-200 rounded-xl">
                     Introducir manualmente
                   </button>
                 </div>
@@ -806,7 +759,7 @@ export default function App() {
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }} className="w-16 h-16 rounded-full border-4 border-indigo-200 border-t-indigo-600 mb-6" />
                   <h3 className="text-lg font-bold text-gray-800 mb-2">Procesando...</h3>
                   <p className="text-sm text-gray-500 mb-1">{scanStatus || 'Procesando...'}</p>
-                  <p className="text-xs text-amber-500 mb-4">La primera vez tarda mas (descarga idiomas)</p>
+                  <p className="text-xs text-amber-500 mb-4">La primera vez tarda mas (descarga idioma)</p>
                   <div className="w-full max-w-xs bg-gray-200 rounded-full h-2 mb-2">
                     <motion.div className="bg-indigo-600 h-2 rounded-full" style={{ width: Math.min(scanProgress, 100) + '%' }} />
                   </div>
@@ -814,7 +767,7 @@ export default function App() {
                   <div className="space-y-2 w-full max-w-xs">
                     {[
                       { t: 3, l: 'Archivo recibido' },
-                      { t: 10, l: 'Motor OCR listo' },
+                      { t: 10, l: 'Motor listo' },
                       { t: 30, l: 'Leyendo texto...' },
                       { t: 60, l: 'Texto extraido' },
                       { t: 90, l: 'Datos analizados' },
@@ -826,6 +779,9 @@ export default function App() {
                       );
                     })}
                   </div>
+                  <button onClick={function () { setIsScanning(false); setScanProgress(0); setScanStatus(''); openManualForm('', 'manual'); showNotif('Cancelado. Introduce datos manualmente.'); }} className="mt-8 text-sm text-red-500 underline">
+                    Cancelar y escribir manualmente
+                  </button>
                 </motion.div>
               )}
 
@@ -838,7 +794,7 @@ export default function App() {
                     </span>
                   </div>
 
-                  {editForm.imageData && editForm.imageData.indexOf('image') !== -1 && (
+                  {editForm.imageData && (
                     <div className="mb-4">
                       <img src={editForm.imageData} alt="Documento" className="w-full max-h-48 object-contain rounded-xl border border-gray-200 cursor-pointer bg-gray-50" onClick={function () { setShowImagePreview(editForm.imageData); }} />
                       <p className="text-xs text-gray-400 mt-1 text-center">Toca para ampliar</p>
@@ -968,7 +924,7 @@ export default function App() {
                       <p className="text-3xl font-bold mt-2" style={{ color: cat.color }}>{fmt(r.amount)}</p>
                       <span className={'inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ' + (r.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{r.paid ? 'Pagada' : 'Pendiente'}</span>
                     </div>
-                    {r.imageData && r.imageData.indexOf('image') !== -1 && (
+                    {r.imageData && (
                       <div className="p-4 border-b border-gray-100 bg-gray-50">
                         <p className="text-xs font-medium text-gray-500 mb-2">📷 Documento adjunto</p>
                         <img src={r.imageData} alt="Documento" className="w-full max-h-64 object-contain rounded-lg cursor-pointer border border-gray-200 bg-white" onClick={function () { setShowImagePreview(r.imageData); }} />

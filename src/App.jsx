@@ -4,16 +4,16 @@ import {
   Camera, Upload, FileText, BarChart3, Download,
   Check, Plus, Search, Filter, Trash2,
   Home, List, CheckCircle2, Circle, FileSpreadsheet,
-  Eye, X
+  X
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, PieChart as RePieChart, Pie, Cell,
   AreaChart, Area, CartesianGrid
 } from 'recharts';
-import Tesseract from 'tesseract.js';
- 
-const CATEGORIES = [
+import { createWorker } from 'tesseract.js';
+
+var CATEGORIES = [
   { id: 'food', name: 'Comida', emoji: '🍽️', color: '#f97316' },
   { id: 'transport', name: 'Transporte', emoji: '🚗', color: '#3b82f6' },
   { id: 'accommodation', name: 'Alojamiento', emoji: '🏠', color: '#8b5cf6' },
@@ -26,7 +26,7 @@ const CATEGORIES = [
   { id: 'other', name: 'Otros', emoji: '📄', color: '#6b7280' },
 ];
 
-const sampleData = [
+var sampleData = [
   { vendor: 'Restaurante El Buen Sabor', amount: 45.80, date: '2026-02-15', category: 'food', desc: 'Comida de negocios', tax: 9.62, paid: true },
   { vendor: 'Repsol Gasolinera', amount: 65.00, date: '2026-02-14', category: 'transport', desc: 'Combustible', tax: 13.65, paid: true },
   { vendor: 'Amazon Business', amount: 129.99, date: '2026-02-12', category: 'office', desc: 'Material de oficina', tax: 27.30, paid: false },
@@ -34,9 +34,9 @@ const sampleData = [
   { vendor: 'Hotel NH Madrid', amount: 185.00, date: '2026-02-08', category: 'accommodation', desc: 'Estancia 1 noche Madrid', tax: 38.85, paid: true },
   { vendor: 'Uber', amount: 12.50, date: '2026-02-08', category: 'transport', desc: 'Trayecto aeropuerto-hotel', tax: 2.63, paid: true },
   { vendor: 'Mercadona', amount: 78.35, date: '2026-02-06', category: 'food', desc: 'Compra semanal', tax: 7.84, paid: true },
-  { vendor: 'MediaMarkt', amount: 299.00, date: '2026-02-04', category: 'tech', desc: 'Teclado y raton inalambricos', tax: 62.79, paid: false },
+  { vendor: 'MediaMarkt', amount: 299.00, date: '2026-02-04', category: 'tech', desc: 'Teclado y raton', tax: 62.79, paid: false },
   { vendor: 'Farmacia Cruz', amount: 15.60, date: '2026-02-03', category: 'health', desc: 'Medicamentos', tax: 1.56, paid: true },
-  { vendor: 'Endesa', amount: 95.40, date: '2026-02-01', category: 'services', desc: 'Factura electrica febrero', tax: 20.03, paid: false },
+  { vendor: 'Endesa', amount: 95.40, date: '2026-02-01', category: 'services', desc: 'Factura electrica', tax: 20.03, paid: false },
   { vendor: 'Vueling', amount: 156.00, date: '2026-01-28', category: 'travel', desc: 'Vuelo BCN-MAD', tax: 32.76, paid: true },
   { vendor: 'Zara', amount: 89.90, date: '2026-01-25', category: 'shopping', desc: 'Ropa de trabajo', tax: 18.88, paid: true },
   { vendor: 'Bar La Tasca', amount: 32.50, date: '2026-01-22', category: 'food', desc: 'Cena con equipo', tax: 6.83, paid: true },
@@ -47,123 +47,132 @@ const sampleData = [
   { vendor: 'Clinica Dental', amount: 120.00, date: '2026-01-05', category: 'health', desc: 'Revision dental', tax: 0, paid: false },
 ];
 
-const initReceipts = sampleData.map((item, i) => ({
-  id: i + 1,
-  vendor: item.vendor,
-  amount: item.amount,
-  date: item.date,
-  category: item.category,
-  description: item.desc,
-  invoiceNumber: 'F-2026-' + String(234 + i).padStart(4, '0'),
-  taxAmount: item.tax,
-  paid: item.paid,
-  fileType: i % 3 === 0 ? 'pdf' : 'jpg',
-  imageData: null,
-}));
-
-const getCat = (id) => CATEGORIES.find(c => c.id === id) || CATEGORIES[9];
-const fmt = (n) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' \u20AC';
-
-/* ===== NUEVO: Parser OCR - Lee texto real de la imagen ===== */
-function parseOCRText(text) {
-  var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
-  var result = {
-    vendor: '',
-    amount: 0,
-    date: new Date().toISOString().split('T')[0],
-    category: 'other',
-    description: '',
-    invoiceNumber: '',
-    taxAmount: 0,
+var initReceipts = sampleData.map(function(item, i) {
+  return {
+    id: i + 1, vendor: item.vendor, amount: item.amount, date: item.date,
+    category: item.category, description: item.desc,
+    invoiceNumber: 'F-2026-' + String(234 + i).padStart(4, '0'),
+    taxAmount: item.tax, paid: item.paid,
+    fileType: i % 3 === 0 ? 'pdf' : 'jpg', imageData: null, ocrText: '',
   };
+});
 
-  // Buscar importes
-  var amounts = [];
-  var patterns = [
-    /(\d{1,6}[.,]\d{2})\s*€/g,
-    /€\s*(\d{1,6}[.,]\d{2})/g,
-    /total[:\s]+(\d{1,6}[.,]\d{2})/gi,
-    /importe[:\s]+(\d{1,6}[.,]\d{2})/gi,
-    /(\d{1,6}[.,]\d{2})\s*EUR/gi,
-    /TOTAL\s+(\d{1,6}[.,]\d{2})/g,
-    /(\d{1,6}[.,]\d{2})\s*$/gm,
-  ];
-  patterns.forEach(function(p) {
-    var m;
-    while ((m = p.exec(text)) !== null) {
-      var v = parseFloat((m[1] || m[2] || '0').replace(',', '.'));
-      if (v > 0.5 && v < 99999) amounts.push(v);
-    }
+var getCat = function(id) { return CATEGORIES.find(function(c) { return c.id === id; }) || CATEGORIES[9]; };
+var fmt = function(n) { return n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',') + ' \u20AC'; };
+
+/* ===== PREPROCESAR IMAGEN: Blanco/Negro + Contraste ===== */
+function preprocessImage(dataUrl) {
+  return new Promise(function(resolve) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var MAX = 1500;
+      var sc = Math.min(1, MAX / Math.max(img.width, img.height));
+      canvas.width = Math.round(img.width * sc);
+      canvas.height = Math.round(img.height * sc);
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      var imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      var d = imgData.data;
+      for (var i = 0; i < d.length; i += 4) {
+        var gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+        var enhanced = ((gray - 128) * 1.8) + 128;
+        enhanced = Math.min(255, Math.max(0, enhanced));
+        d[i] = enhanced; d[i + 1] = enhanced; d[i + 2] = enhanced;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = function() { resolve(dataUrl); };
+    img.src = dataUrl;
   });
-  if (amounts.length > 0) {
-    result.amount = Math.max.apply(null, amounts);
+}
+
+/* ===== PARSER OCR ===== */
+function parseOCRText(text) {
+  if (!text || text.trim().length < 3) {
+    return { vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0 };
+  }
+  var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+  var result = { vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0 };
+  var fullText = text;
+
+  // 1) IMPORTES — buscar "TOTAL", "IMPORTE", "A PAGAR" primero
+  var totalMatch = fullText.match(/(?:total|importe|a\s*pagar|amount|suma)[:\s]*(\d{1,6}[.,]\d{2})/i);
+  if (totalMatch) {
+    result.amount = parseFloat(totalMatch[1].replace(',', '.'));
+  } else {
+    var amounts = [];
+    var p1 = /(\d{1,6}[.,]\d{2})\s*[€E]/g; var m1;
+    while ((m1 = p1.exec(fullText)) !== null) amounts.push(parseFloat(m1[1].replace(',', '.')));
+    var p2 = /[€E]\s*(\d{1,6}[.,]\d{2})/g; var m2;
+    while ((m2 = p2.exec(fullText)) !== null) amounts.push(parseFloat(m2[1].replace(',', '.')));
+    var p3 = /(\d{1,6}[.,]\d{2})\s*EUR/gi; var m3;
+    while ((m3 = p3.exec(fullText)) !== null) amounts.push(parseFloat(m3[1].replace(',', '.')));
+    var p4 = /(\d{2,6}[.,]\d{2})\s*$/gm; var m4;
+    while ((m4 = p4.exec(fullText)) !== null) {
+      var v = parseFloat(m4[1].replace(',', '.'));
+      if (v > 1 && v < 50000) amounts.push(v);
+    }
+    amounts = amounts.filter(function(a) { return a > 0.5 && a < 99999; });
+    if (amounts.length > 0) result.amount = Math.max.apply(null, amounts);
+  }
+
+  // 2) IVA
+  var ivaMatch = fullText.match(/(?:iva|i\.v\.a|tax|impuesto)[:\s]*(\d{1,6}[.,]\d{2})/i);
+  if (ivaMatch) {
+    result.taxAmount = parseFloat(ivaMatch[1].replace(',', '.'));
+  } else if (result.amount > 0) {
     result.taxAmount = parseFloat((result.amount * 0.21 / 1.21).toFixed(2));
   }
 
-  // Buscar IVA especifico
-  var ivaMatch = text.match(/(?:iva|i\.v\.a)[:\s]+(\d{1,6}[.,]\d{2})/i);
-  if (ivaMatch) {
-    result.taxAmount = parseFloat(ivaMatch[1].replace(',', '.'));
-  }
-
-  // Buscar fecha
-  var dateMatch = text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  // 3) FECHA
+  var dateMatch = fullText.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (dateMatch) {
-    var d = parseInt(dateMatch[1]);
-    var mo = parseInt(dateMatch[2]);
-    var y = parseInt(dateMatch[3]);
-    if (y < 100) y += 2000;
-    if (mo > 12) { var tmp = d; d = mo; mo = tmp; }
-    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
-      result.date = y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    var dd = parseInt(dateMatch[1]); var mm = parseInt(dateMatch[2]); var yy = parseInt(dateMatch[3]);
+    if (yy < 100) yy += 2000;
+    if (mm > 12) { var tmp = dd; dd = mm; mm = tmp; }
+    if (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) {
+      result.date = yy + '-' + String(mm).padStart(2, '0') + '-' + String(dd).padStart(2, '0');
     }
   }
 
-  // Buscar numero de factura
-  var invMatch = text.match(/(?:factura|fra|ticket|n[ºo°]|num)[:\s#]*([A-Z0-9][\w\-\/]{2,})/i);
-  if (!invMatch) invMatch = text.match(/([A-Z]{1,3}[\-\/]\d{3,})/);
+  // 4) NUMERO FACTURA
+  var invMatch = fullText.match(/(?:factura|fra|ticket|n[°ºo]|num|receipt)[:\s#]*([A-Z0-9][\w\-\/]{2,})/i);
+  if (!invMatch) invMatch = fullText.match(/([A-Z]{1,3}[\-\/]\d{3,})/);
   result.invoiceNumber = invMatch ? invMatch[1].trim() : ('T-' + Date.now().toString().slice(-6));
 
-  // Buscar proveedor (primera linea con texto significativo)
-  for (var i = 0; i < Math.min(lines.length, 8); i++) {
-    var clean = lines[i].replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ\s]/g, '').trim();
-    if (clean.length > 3 && clean.length < 50) {
-      result.vendor = clean;
-      break;
+  // 5) PROVEEDOR — primeras lineas con texto
+  for (var i = 0; i < Math.min(lines.length, 10); i++) {
+    var clean = lines[i].replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑüÜ\s\-\.]/g, '').trim();
+    if (clean.length >= 3 && clean.length < 60 && !/^\d+$/.test(clean) && !/^(fecha|date|hora|time|total|iva|nif|cif|tel)/i.test(clean)) {
+      result.vendor = clean; break;
     }
   }
-  if (!result.vendor) result.vendor = 'Proveedor no detectado';
+  if (!result.vendor) result.vendor = '';
 
-  // Auto-categorizar por palabras clave
-  var lt = text.toLowerCase();
+  // 6) AUTO-CATEGORIA
+  var lt = fullText.toLowerCase();
   var kwMap = {
-    food: ['restaurante','bar ','cafeteria','mercadona','carrefour','supermercado','alimentacion','comida','menu del dia','cafe','lidl','dia','aldi','burger','pizza','kebab'],
-    transport: ['gasolinera','repsol','bp','cepsa','uber','cabify','taxi','combustible','gasolina','diesel','parking','aparcamiento','shell'],
-    accommodation: ['hotel','hostal','alojamiento','airbnb','booking','habitacion','pension'],
-    office: ['oficina','papeleria','material','amazon','staples'],
-    tech: ['mediamarkt','fnac','apple','samsung','pc componentes','electronica','informatica','movil','portatil'],
-    health: ['farmacia','clinica','dental','optica','medico','salud','hospital','parafarmacia'],
-    travel: ['vueling','iberia','ryanair','renfe','vuelo','billete','avion','tren','autobus'],
-    shopping: ['zara','primark','corte ingles','mango','h&m','ropa','tienda','boutique'],
-    services: ['movistar','vodafone','orange','endesa','naturgy','iberdrola','telefon','internet','luz','gas','agua','seguro'],
+    food: ['restaurante', 'bar ', 'cafeteria', 'mercadona', 'carrefour', 'supermercado', 'alimentacion', 'comida', 'menu', 'cafe', 'lidl', ' dia ', 'aldi', 'burger', 'pizza', 'kebab', 'mcdon', 'telepizza', 'just eat'],
+    transport: ['gasolinera', 'repsol', ' bp ', 'cepsa', 'uber', 'cabify', 'taxi', 'combustible', 'gasolina', 'diesel', 'parking', 'aparcamiento', 'shell', 'galp'],
+    accommodation: ['hotel', 'hostal', 'alojamiento', 'airbnb', 'booking', 'habitacion', 'pension'],
+    office: ['oficina', 'papeleria', 'material', 'amazon', 'staples'],
+    tech: ['mediamarkt', 'fnac', 'apple', 'samsung', 'pc componentes', 'electronica', 'informatica', 'movil', 'portatil', 'phone house'],
+    health: ['farmacia', 'clinica', 'dental', 'optica', 'medico', 'salud', 'hospital', 'parafarmacia'],
+    travel: ['vueling', 'iberia', 'ryanair', 'renfe', 'vuelo', 'billete', 'avion', 'tren', 'autobus', 'alsa'],
+    shopping: ['zara', 'primark', 'corte ingles', 'mango', 'h&m', 'ropa', 'tienda', 'boutique', 'decathlon', 'ikea'],
+    services: ['movistar', 'vodafone', 'orange', 'endesa', 'naturgy', 'iberdrola', 'telefon', 'internet', 'luz', 'gas', 'agua', 'seguro', 'jazztel', 'digi'],
   };
   var catKeys = Object.keys(kwMap);
-  for (var ci = 0; ci < catKeys.length; ci++) {
-    var cat = catKeys[ci];
-    var kws = kwMap[cat];
+  outer: for (var ci = 0; ci < catKeys.length; ci++) {
+    var kws = kwMap[catKeys[ci]];
     for (var ki = 0; ki < kws.length; ki++) {
-      if (lt.indexOf(kws[ki]) !== -1) {
-        result.category = cat;
-        ci = catKeys.length; // break outer
-        break;
-      }
+      if (lt.indexOf(kws[ki]) !== -1) { result.category = catKeys[ci]; break outer; }
     }
   }
 
-  result.description = result.vendor !== 'Proveedor no detectado'
-    ? result.vendor
-    : 'Factura de ' + getCat(result.category).name;
-
+  result.description = result.vendor || ('Factura de ' + getCat(result.category).name);
   return result;
 }
 
@@ -188,72 +197,79 @@ export default function App() {
 
   var showNotif = function(msg) {
     setNotification(msg);
-    setTimeout(function() { setNotification(null); }, 3000);
+    setTimeout(function() { setNotification(null); }, 3500);
   };
 
-  /* ===== NUEVO: Escaneo REAL con Tesseract.js OCR ===== */
-  var realAIScan = function(imageData, fileName, fileType) {
+  /* ===== ESCANEO OCR REAL con createWorker (v5) ===== */
+  var realAIScan = async function(imageData, fileName, fileType) {
     setIsScanning(true);
     setScanProgress(0);
-    setScanStatus('Iniciando OCR...');
+    setScanStatus('Preparando imagen...');
 
-    Tesseract.recognize(imageData, 'spa+eng', {
-      logger: function(m) {
-        if (m.status === 'recognizing text') {
-          setScanProgress(20 + m.progress * 70);
-          setScanStatus('Leyendo texto...');
-        } else if (m.status === 'loading language traineddata') {
-          setScanProgress(5 + m.progress * 15);
-          setScanStatus('Cargando idioma (solo la primera vez)...');
-        } else if (m.status === 'initializing api') {
-          setScanProgress(3);
-          setScanStatus('Preparando motor OCR...');
+    try {
+      setScanProgress(5);
+      var processedImage = await preprocessImage(imageData);
+
+      setScanProgress(10);
+      setScanStatus('Iniciando motor OCR...');
+
+      var worker = await createWorker('spa', 1, {
+        logger: function(info) {
+          if (info.status === 'recognizing text') {
+            setScanProgress(25 + Math.round(info.progress * 60));
+            setScanStatus('Leyendo texto... ' + Math.round(info.progress * 100) + '%');
+          } else if (info.status === 'loading language traineddata') {
+            setScanProgress(10 + Math.round(info.progress * 15));
+            setScanStatus('Descargando idioma espanol (solo 1a vez)...');
+          } else if (info.status === 'initializing api') {
+            setScanProgress(22);
+            setScanStatus('Inicializando...');
+          }
         }
-      },
-    }).then(function(result) {
-      setScanProgress(95);
-      setScanStatus('Analizando datos...');
-      var ocrText = (result && result.data && result.data.text) || '';
+      });
+
+      setScanProgress(25);
+      setScanStatus('Analizando imagen...');
+      var ocrResult = await worker.recognize(processedImage);
+      var ocrText = (ocrResult && ocrResult.data && ocrResult.data.text) || '';
+      await worker.terminate();
+
+      setScanProgress(90);
+      setScanStatus('Extrayendo datos...');
       var parsed = parseOCRText(ocrText);
+
       setScanProgress(100);
       setScanStatus('Completado!');
 
       setTimeout(function() {
-        setEditForm(Object.assign({}, parsed, {
-          paid: false,
-          fileType: fileType || 'jpg',
-          fileName: fileName,
-          imageData: imageData,
-          ocrText: ocrText,
-        }));
-        setIsScanning(false);
-        setScanProgress(0);
-        setScanStatus('');
-        if (ocrText.length < 10) {
+        setEditForm({
+          vendor: parsed.vendor, amount: parsed.amount, date: parsed.date,
+          category: parsed.category, description: parsed.description,
+          invoiceNumber: parsed.invoiceNumber, taxAmount: parsed.taxAmount,
+          paid: false, fileType: fileType || 'jpg', fileName: fileName,
+          imageData: imageData, ocrText: ocrText,
+        });
+        setIsScanning(false); setScanProgress(0); setScanStatus('');
+        if (!ocrText || ocrText.trim().length < 5) {
           showNotif('Poco texto detectado. Revisa los datos.');
         } else {
-          showNotif('Texto detectado! Revisa los datos.');
+          showNotif('Texto leido (' + ocrText.trim().split('\n').length + ' lineas). Revisa datos.');
         }
       }, 600);
 
-    }).catch(function(err) {
+    } catch (err) {
       console.error('OCR Error:', err);
       setEditForm({
-        vendor: '', amount: 0,
-        date: new Date().toISOString().split('T')[0],
+        vendor: '', amount: 0, date: new Date().toISOString().split('T')[0],
         category: 'other', description: '', invoiceNumber: 'T-' + Date.now().toString().slice(-6),
-        taxAmount: 0, paid: false,
-        fileType: fileType || 'jpg', fileName: fileName,
-        imageData: imageData, ocrText: '',
+        taxAmount: 0, paid: false, fileType: fileType || 'jpg', fileName: fileName,
+        imageData: imageData, ocrText: 'Error: ' + (err && err.message ? err.message : 'OCR fallo'),
       });
-      setIsScanning(false);
-      setScanProgress(0);
-      setScanStatus('');
-      showNotif('Error al leer. Introduce datos manualmente.');
-    });
+      setIsScanning(false); setScanProgress(0); setScanStatus('');
+      showNotif('Error OCR. Introduce datos manualmente.');
+    }
   };
 
-  /* ===== NUEVO: Lee la imagen como base64 antes de escanear ===== */
   var handleFileUpload = function(e) {
     var file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -263,13 +279,12 @@ export default function App() {
       var isPDF = file.type === 'application/pdf' || file.name.toLowerCase().indexOf('.pdf') !== -1;
       if (isPDF) {
         setEditForm({
-          vendor: '', amount: 0,
-          date: new Date().toISOString().split('T')[0],
+          vendor: '', amount: 0, date: new Date().toISOString().split('T')[0],
           category: 'other', description: '', invoiceNumber: 'T-' + Date.now().toString().slice(-6),
-          taxAmount: 0, paid: false, fileType: 'pdf',
-          fileName: file.name, imageData: dataUrl, ocrText: '',
+          taxAmount: 0, paid: false, fileType: 'pdf', fileName: file.name,
+          imageData: null, ocrText: '',
         });
-        showNotif('PDF adjuntado. Introduce los datos.');
+        showNotif('PDF adjuntado. Introduce datos manualmente.');
       } else {
         realAIScan(dataUrl, file.name, 'jpg');
       }
@@ -280,18 +295,16 @@ export default function App() {
 
   var saveReceipt = function() {
     if (!editForm) return;
-    var newReceipt = Object.assign({}, editForm, { id: nextId });
-    setReceipts(function(prev) { return [newReceipt].concat(prev); });
+    var nr = Object.assign({}, editForm, { id: nextId });
+    setReceipts(function(prev) { return [nr].concat(prev); });
     setNextId(function(p) { return p + 1; });
     setEditForm(null);
     setView('receipts');
-    showNotif('Factura guardada con imagen');
+    showNotif('Factura guardada' + (editForm.imageData ? ' con foto' : ''));
   };
 
   var togglePaid = function(id) {
-    setReceipts(function(prev) {
-      return prev.map(function(r) { return r.id === id ? Object.assign({}, r, { paid: !r.paid }) : r; });
-    });
+    setReceipts(function(prev) { return prev.map(function(r) { return r.id === id ? Object.assign({}, r, { paid: !r.paid }) : r; }); });
     if (selectedReceipt && selectedReceipt.id === id) {
       setSelectedReceipt(function(prev) { return prev ? Object.assign({}, prev, { paid: !prev.paid }) : null; });
     }
@@ -305,9 +318,7 @@ export default function App() {
 
   var filteredReceipts = useMemo(function() {
     return receipts.filter(function(r) {
-      var ms = !searchQuery || r.vendor.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1 ||
-        r.description.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1 ||
-        r.invoiceNumber.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1;
+      var ms = !searchQuery || r.vendor.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1 || r.description.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1 || r.invoiceNumber.toLowerCase().indexOf(searchQuery.toLowerCase()) !== -1;
       var mc = filterCategory === 'all' || r.category === filterCategory;
       var mp = filterPaid === 'all' || (filterPaid === 'paid' && r.paid) || (filterPaid === 'unpaid' && !r.paid);
       return ms && mc && mp;
@@ -324,34 +335,21 @@ export default function App() {
       return Object.assign({}, cat, { total: cr.reduce(function(s, r) { return s + r.amount; }, 0), count: cr.length });
     }).filter(function(c) { return c.count > 0; }).sort(function(a, b) { return b.total - a.total; });
     var md = {};
-    receipts.forEach(function(r) {
-      var m = r.date.substring(0, 7);
-      md[m] = (md[m] || 0) + r.amount;
+    receipts.forEach(function(r) { var m = r.date.substring(0, 7); md[m] = (md[m] || 0) + r.amount; });
+    var monthlyChart = Object.entries(md).sort(function(a, b) { return a[0].localeCompare(b[0]); }).map(function(e) {
+      return { name: new Date(e[0] + '-01').toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }), total: parseFloat(e[1].toFixed(2)) };
     });
-    var monthlyChart = Object.entries(md)
-      .sort(function(a, b) { return a[0].localeCompare(b[0]); })
-      .map(function(entry) {
-        return {
-          name: new Date(entry[0] + '-01').toLocaleDateString('es-ES', { month: 'short', year: '2-digit' }),
-          total: parseFloat(entry[1].toFixed(2)),
-        };
-      });
     return { total: total, totalTax: totalTax, unpaidCount: unpaid.length, unpaidTotal: unpaidTotal, categoryTotals: categoryTotals, monthlyChart: monthlyChart };
   }, [receipts]);
 
   var exportCSV = function() {
     try {
       var h = ['Fecha', 'Proveedor', 'No Factura', 'Descripcion', 'Categoria', 'Importe', 'IVA', 'Pagada'];
-      var rows = filteredReceipts.map(function(r) {
-        return [r.date, r.vendor, r.invoiceNumber, r.description, getCat(r.category).name, r.amount.toFixed(2), r.taxAmount.toFixed(2), r.paid ? 'Si' : 'No'];
-      });
+      var rows = filteredReceipts.map(function(r) { return [r.date, r.vendor, r.invoiceNumber, r.description, getCat(r.category).name, r.amount.toFixed(2), r.taxAmount.toFixed(2), r.paid ? 'Si' : 'No']; });
       var csv = [h].concat(rows).map(function(row) { return row.map(function(c) { return '"' + c + '"'; }).join(','); }).join('\n');
       var blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
-      var a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'facturas_' + new Date().toISOString().split('T')[0] + '.csv';
-      a.click();
-      showNotif('Excel/CSV exportado');
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'facturas_' + new Date().toISOString().split('T')[0] + '.csv'; a.click();
+      showNotif('CSV exportado');
     } catch (err) { showNotif('Error al exportar'); }
   };
 
@@ -359,34 +357,10 @@ export default function App() {
     var ta = filteredReceipts.reduce(function(s, r) { return s + r.amount; }, 0);
     var tt = filteredReceipts.reduce(function(s, r) { return s + r.taxAmount; }, 0);
     var tableRows = filteredReceipts.map(function(r) {
-      return '<tr><td>' + r.date + '</td><td>' + r.vendor + '</td><td>' + r.invoiceNumber + '</td>' +
-        '<td>' + getCat(r.category).emoji + ' ' + getCat(r.category).name + '</td><td>' + r.amount.toFixed(2) + ' EUR</td>' +
-        '<td>' + r.taxAmount.toFixed(2) + ' EUR</td><td class="' + (r.paid ? 'g' : 'r') + '">' + (r.paid ? 'Pagada' : 'Pendiente') + '</td></tr>';
+      return '<tr><td>' + r.date + '</td><td>' + r.vendor + '</td><td>' + r.invoiceNumber + '</td><td>' + getCat(r.category).emoji + ' ' + getCat(r.category).name + '</td><td>' + r.amount.toFixed(2) + ' EUR</td><td>' + r.taxAmount.toFixed(2) + ' EUR</td><td class="' + (r.paid ? 'g' : 'r') + '">' + (r.paid ? 'Pagada' : 'Pendiente') + '</td></tr>';
     }).join('');
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe - TicketAI</title>' +
-      '<style>body{font-family:Arial,sans-serif;padding:40px;color:#333}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:10px}' +
-      'table{width:100%;border-collapse:collapse;margin:20px 0}th{background:#4f46e5;color:#fff;padding:10px;text-align:left;font-size:13px}' +
-      'td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}tr:nth-child(even){background:#f9fafb}' +
-      '.tot{font-weight:700;background:#eef2ff!important}.g{color:#16a34a}.r{color:#dc2626}' +
-      '.cards{display:flex;gap:20px;margin:20px 0;flex-wrap:wrap}.card{background:#f3f4f6;padding:15px 25px;border-radius:8px;min-width:150px}' +
-      '.card h3{margin:0;color:#6b7280;font-size:13px}.card p{margin:5px 0 0;font-size:22px;font-weight:700;color:#4f46e5}' +
-      '@media print{body{padding:20px}}</style></head><body>' +
-      '<h1>TicketAI - Informe de Gastos</h1>' +
-      '<p style="color:#6b7280">Generado: ' + new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p>' +
-      '<div class="cards"><div class="card"><h3>Total Gastos</h3><p>' + ta.toFixed(2) + ' EUR</p></div>' +
-      '<div class="card"><h3>IVA Total</h3><p>' + tt.toFixed(2) + ' EUR</p></div>' +
-      '<div class="card"><h3>Base Imponible</h3><p>' + (ta - tt).toFixed(2) + ' EUR</p></div>' +
-      '<div class="card"><h3>Facturas</h3><p>' + filteredReceipts.length + '</p></div></div>' +
-      '<table><tr><th>Fecha</th><th>Proveedor</th><th>No Factura</th><th>Categoria</th><th>Importe</th><th>IVA</th><th>Estado</th></tr>' +
-      tableRows +
-      '<tr class="tot"><td colspan="4">TOTAL</td><td>' + ta.toFixed(2) + ' EUR</td><td>' + tt.toFixed(2) + ' EUR</td><td></td></tr></table>' +
-      '<p style="color:#9ca3af;font-size:12px;margin-top:30px">Generado con TicketAI</p>' +
-      '<script>window.print();<\/script></body></html>';
-    try {
-      var w = window.open('', '_blank');
-      if (w) { w.document.write(html); w.document.close(); }
-      showNotif('PDF listo para imprimir');
-    } catch (err) { showNotif('Permite pop-ups para exportar PDF'); }
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Informe TicketAI</title><style>body{font-family:Arial,sans-serif;padding:40px;color:#333}h1{color:#4f46e5;border-bottom:2px solid #4f46e5;padding-bottom:10px}table{width:100%;border-collapse:collapse;margin:20px 0}th{background:#4f46e5;color:#fff;padding:10px;text-align:left;font-size:13px}td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}tr:nth-child(even){background:#f9fafb}.tot{font-weight:700;background:#eef2ff!important}.g{color:#16a34a}.r{color:#dc2626}.cards{display:flex;gap:20px;margin:20px 0;flex-wrap:wrap}.card{background:#f3f4f6;padding:15px 25px;border-radius:8px;min-width:150px}.card h3{margin:0;color:#6b7280;font-size:13px}.card p{margin:5px 0 0;font-size:22px;font-weight:700;color:#4f46e5}@media print{body{padding:20px}}</style></head><body><h1>TicketAI - Informe de Gastos</h1><p style="color:#6b7280">Generado: ' + new Date().toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + '</p><div class="cards"><div class="card"><h3>Total</h3><p>' + ta.toFixed(2) + ' EUR</p></div><div class="card"><h3>IVA</h3><p>' + tt.toFixed(2) + ' EUR</p></div><div class="card"><h3>Base</h3><p>' + (ta - tt).toFixed(2) + ' EUR</p></div><div class="card"><h3>Facturas</h3><p>' + filteredReceipts.length + '</p></div></div><table><tr><th>Fecha</th><th>Proveedor</th><th>No Factura</th><th>Categoria</th><th>Importe</th><th>IVA</th><th>Estado</th></tr>' + tableRows + '<tr class="tot"><td colspan="4">TOTAL</td><td>' + ta.toFixed(2) + ' EUR</td><td>' + tt.toFixed(2) + ' EUR</td><td></td></tr></table><script>window.print();<\/script></body></html>';
+    try { var w = window.open('', '_blank'); if (w) { w.document.write(html); w.document.close(); } showNotif('PDF listo'); } catch (err) { showNotif('Permite pop-ups'); }
   };
 
   var navTo = function(v) {
@@ -398,19 +372,10 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col max-w-lg mx-auto relative overflow-hidden">
 
-      {/* NUEVO: Modal imagen ampliada */}
       <AnimatePresence>
         {showImagePreview && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4"
-            onClick={function() { setShowImagePreview(null); }}
-          >
-            <button className="absolute top-4 right-4 text-white bg-white/20 rounded-full p-2 z-10">
-              <X size={24} />
-            </button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 bg-black/90 z-[60] flex items-center justify-center p-4" onClick={function() { setShowImagePreview(null); }}>
+            <button className="absolute top-4 right-4 text-white bg-white/20 rounded-full p-2"><X size={24} /></button>
             <img src={showImagePreview} alt="Ampliada" className="max-w-full max-h-full object-contain rounded-lg" />
           </motion.div>
         )}
@@ -418,15 +383,8 @@ export default function App() {
 
       <AnimatePresence>
         {notification && (
-          <motion.div
-            initial={{ opacity: 0, y: -40 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -40 }}
-            className="fixed top-4 left-0 right-0 z-50 flex justify-center pointer-events-none"
-          >
-            <div className="bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-xl text-sm font-medium pointer-events-auto">
-              {notification}
-            </div>
+          <motion.div initial={{ opacity: 0, y: -40 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -40 }} className="fixed top-4 left-0 right-0 z-50 flex justify-center pointer-events-none">
+            <div className="bg-gray-900 text-white px-5 py-2.5 rounded-xl shadow-xl text-sm font-medium pointer-events-auto">{notification}</div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -446,6 +404,7 @@ export default function App() {
       <div className="flex-1 overflow-y-auto pb-24">
         <AnimatePresence mode="wait">
 
+          {/* ==================== DASHBOARD ==================== */}
           {view === 'dashboard' && (
             <motion.div key="dash" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-4">
               <div className="grid grid-cols-2 gap-3 mb-5">
@@ -468,7 +427,6 @@ export default function App() {
                   <p className="text-xs text-indigo-400 mt-1">+ Nueva factura</p>
                 </motion.div>
               </div>
-
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-5">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Gastos por Categoria</h3>
                 {stats.categoryTotals.slice(0, 6).map(function(cat, i) {
@@ -488,7 +446,6 @@ export default function App() {
                   );
                 })}
               </div>
-
               {stats.monthlyChart.length > 0 && (
                 <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-5">
                   <h3 className="text-sm font-semibold text-gray-700 mb-3">Tendencia Mensual</h3>
@@ -504,7 +461,6 @@ export default function App() {
                   </ResponsiveContainer>
                 </div>
               )}
-
               <div className="flex justify-between items-center mb-3">
                 <h3 className="text-sm font-semibold text-gray-700">Ultimas Facturas</h3>
                 <button onClick={function() { navTo('receipts'); }} className="text-xs text-indigo-500 font-medium">Ver todas</button>
@@ -513,8 +469,8 @@ export default function App() {
                 var cat = getCat(r.category);
                 return (
                   <motion.div key={r.id} whileTap={{ scale: 0.98 }} onClick={function() { setSelectedReceipt(r); setView('receipts'); }} className="bg-white rounded-xl p-3 mb-2 shadow-sm border border-gray-100 flex items-center cursor-pointer">
-                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0" style={{ backgroundColor: cat.color + '18' }}>
-                      {r.imageData ? <img src={r.imageData} alt="" className="w-full h-full object-cover rounded-xl" /> : cat.emoji}
+                    <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0 overflow-hidden" style={{ backgroundColor: cat.color + '18' }}>
+                      {r.imageData ? <img src={r.imageData} alt="" className="w-full h-full object-cover" /> : cat.emoji}
                     </div>
                     <div className="flex-1 ml-3 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{r.vendor}</p>
@@ -530,12 +486,13 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* ==================== UPLOAD / SCAN ==================== */}
           {view === 'upload' && (
             <motion.div key="upload" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-4">
               {!isScanning && !editForm && (
                 <div>
                   <h2 className="text-lg font-bold text-gray-800 mb-1">Escanear Factura</h2>
-                  <p className="text-sm text-gray-500 mb-5">Sube una foto o PDF y la IA extraera los datos reales</p>
+                  <p className="text-sm text-gray-500 mb-5">Haz foto o sube imagen — OCR leera el texto real</p>
                   <motion.button whileTap={{ scale: 0.97 }} onClick={function() { cameraInputRef.current && cameraInputRef.current.click(); }} className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl p-6 mb-4 flex flex-col items-center shadow-lg">
                     <Camera size={36} className="mb-2" />
                     <span className="font-semibold">Hacer Foto</span>
@@ -544,8 +501,8 @@ export default function App() {
                   <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileUpload} />
                   <motion.div whileTap={{ scale: 0.98 }} onClick={function() { fileInputRef.current && fileInputRef.current.click(); }} className="w-full border-2 border-dashed border-gray-300 rounded-2xl p-8 flex flex-col items-center cursor-pointer hover:border-indigo-400 transition-colors">
                     <Upload size={32} className="text-gray-400 mb-3" />
-                    <span className="font-medium text-gray-600 text-sm">Subir archivo</span>
-                    <span className="text-gray-400 text-xs mt-1">JPG, PNG (las fotos se leen con OCR)</span>
+                    <span className="font-medium text-gray-600 text-sm">Subir imagen</span>
+                    <span className="text-gray-400 text-xs mt-1">JPG, PNG</span>
                   </motion.div>
                   <input ref={fileInputRef} type="file" accept="image/*,.pdf" className="hidden" onChange={handleFileUpload} />
                   <button onClick={function() { setEditForm({ vendor: '', amount: 0, date: new Date().toISOString().split('T')[0], category: 'other', description: '', invoiceNumber: '', taxAmount: 0, paid: false, fileType: 'manual', imageData: null, ocrText: '' }); }} className="w-full mt-4 py-3 text-indigo-600 font-medium text-sm border border-indigo-200 rounded-xl">
@@ -557,20 +514,20 @@ export default function App() {
               {isScanning && (
                 <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex flex-col items-center py-16">
                   <motion.div animate={{ rotate: 360 }} transition={{ duration: 1.5, repeat: Infinity, ease: 'linear' }} className="w-16 h-16 rounded-full border-4 border-indigo-200 border-t-indigo-600 mb-6" />
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">Leyendo con OCR real...</h3>
-                  <p className="text-sm text-gray-500 mb-1">{scanStatus || 'Procesando imagen...'}</p>
-                  <p className="text-xs text-amber-500 mb-4">(La primera vez tarda mas al descargar idioma)</p>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Leyendo con OCR...</h3>
+                  <p className="text-sm text-gray-500 mb-1">{scanStatus || 'Procesando...'}</p>
+                  <p className="text-xs text-amber-500 mb-4">La primera vez tarda mas (descarga idioma)</p>
                   <div className="w-full max-w-xs bg-gray-200 rounded-full h-2 mb-2">
                     <motion.div className="bg-indigo-600 h-2 rounded-full" style={{ width: Math.min(scanProgress, 100) + '%' }} />
                   </div>
                   <p className="text-xs text-gray-400 mb-6">{Math.min(Math.round(scanProgress), 100)}%</p>
                   <div className="space-y-2 w-full max-w-xs">
                     {[
-                      { t: 3, l: 'Motor OCR iniciado' },
-                      { t: 15, l: 'Idioma cargado' },
-                      { t: 30, l: 'Leyendo texto de la imagen...' },
+                      { t: 5, l: 'Imagen preparada' },
+                      { t: 15, l: 'Motor OCR listo' },
+                      { t: 30, l: 'Leyendo texto...' },
                       { t: 80, l: 'Texto extraido' },
-                      { t: 95, l: 'Datos analizados' },
+                      { t: 90, l: 'Datos analizados' },
                     ].filter(function(s) { return scanProgress > s.t; }).map(function(s, i) {
                       return (
                         <motion.div key={i} initial={{ opacity: 0, x: -15 }} animate={{ opacity: 1, x: 0 }} className="flex items-center text-sm text-emerald-600">
@@ -586,27 +543,20 @@ export default function App() {
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-bold text-gray-800">Revisar Datos</h3>
-                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">OCR Real</span>
+                    <span className="text-xs bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full font-medium">OCR</span>
                   </div>
 
-                  {/* NUEVO: Preview de la imagen capturada */}
                   {editForm.imageData && editForm.imageData.indexOf('image') !== -1 && (
                     <div className="mb-4">
-                      <img
-                        src={editForm.imageData}
-                        alt="Documento escaneado"
-                        className="w-full max-h-48 object-contain rounded-xl border border-gray-200 cursor-pointer bg-gray-50"
-                        onClick={function() { setShowImagePreview(editForm.imageData); }}
-                      />
-                      <p className="text-xs text-gray-400 mt-1 text-center">📷 Foto guardada - Toca para ampliar</p>
+                      <img src={editForm.imageData} alt="Documento" className="w-full max-h-48 object-contain rounded-xl border border-gray-200 cursor-pointer bg-gray-50" onClick={function() { setShowImagePreview(editForm.imageData); }} />
+                      <p className="text-xs text-gray-400 mt-1 text-center">Toca para ampliar</p>
                     </div>
                   )}
 
-                  {/* NUEVO: Texto OCR detectado (desplegable) */}
                   {editForm.ocrText && editForm.ocrText.length > 0 && (
                     <details className="mb-4 bg-blue-50 rounded-xl p-3 border border-blue-100">
-                      <summary className="text-xs text-blue-600 cursor-pointer font-medium">🔍 Ver texto detectado por OCR ({editForm.ocrText.length} caracteres)</summary>
-                      <pre className="text-xs text-gray-600 mt-2 bg-white p-2 rounded-lg whitespace-pre-wrap max-h-32 overflow-y-auto border">{editForm.ocrText}</pre>
+                      <summary className="text-xs text-blue-600 cursor-pointer font-medium">🔍 Texto detectado por OCR ({editForm.ocrText.length} caracteres)</summary>
+                      <pre className="text-xs text-gray-600 mt-2 bg-white p-2 rounded-lg whitespace-pre-wrap max-h-40 overflow-y-auto border">{editForm.ocrText}</pre>
                     </details>
                   )}
 
@@ -659,6 +609,7 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* ==================== RECEIPTS LIST ==================== */}
           {view === 'receipts' && !selectedReceipt && (
             <motion.div key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-4">
               <div className="relative mb-3">
@@ -701,61 +652,41 @@ export default function App() {
                       </div>
                       <div className="text-right ml-2 flex-shrink-0">
                         <p className="text-sm font-bold text-gray-800">{fmt(r.amount)}</p>
-                        <p className="text-xs text-gray-400">{r.imageData ? '📷 ' : ''}{cat.name}</p>
+                        <p className="text-xs text-gray-400">{r.imageData ? '📷' : ''} {cat.name}</p>
                       </div>
                     </div>
                   </motion.div>
                 );
               })}
               {filteredReceipts.length === 0 && (
-                <div className="text-center py-16">
-                  <FileText size={40} className="mx-auto text-gray-300 mb-3" />
-                  <p className="text-gray-400 text-sm">No se encontraron facturas</p>
-                </div>
+                <div className="text-center py-16"><FileText size={40} className="mx-auto text-gray-300 mb-3" /><p className="text-gray-400 text-sm">No se encontraron facturas</p></div>
               )}
             </motion.div>
           )}
 
+          {/* ==================== RECEIPT DETAIL ==================== */}
           {view === 'receipts' && selectedReceipt && (
             <motion.div key="detail" initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }} className="px-4 py-4">
               <button onClick={function() { setSelectedReceipt(null); }} className="text-sm text-indigo-600 font-medium mb-4">Volver</button>
               {(function() {
-                var r = selectedReceipt;
-                var cat = getCat(r.category);
+                var r = selectedReceipt; var cat = getCat(r.category);
                 return (
                   <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="p-5 text-center border-b border-gray-100" style={{ backgroundColor: cat.color + '10' }}>
                       <span className="text-3xl block mb-1">{cat.emoji}</span>
                       <h3 className="text-base font-bold text-gray-800">{r.vendor}</h3>
                       <p className="text-3xl font-bold mt-2" style={{ color: cat.color }}>{fmt(r.amount)}</p>
-                      <span className={'inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ' + (r.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                        {r.paid ? 'Pagada' : 'Pendiente'}
-                      </span>
+                      <span className={'inline-block mt-2 px-3 py-1 rounded-full text-xs font-medium ' + (r.paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>{r.paid ? 'Pagada' : 'Pendiente'}</span>
                     </div>
-
-                    {/* NUEVO: Mostrar imagen guardada */}
                     {r.imageData && r.imageData.indexOf('image') !== -1 && (
                       <div className="p-4 border-b border-gray-100 bg-gray-50">
                         <p className="text-xs font-medium text-gray-500 mb-2">📷 Documento adjunto</p>
-                        <img
-                          src={r.imageData}
-                          alt="Documento"
-                          className="w-full max-h-64 object-contain rounded-lg cursor-pointer border border-gray-200 bg-white"
-                          onClick={function() { setShowImagePreview(r.imageData); }}
-                        />
+                        <img src={r.imageData} alt="Documento" className="w-full max-h-64 object-contain rounded-lg cursor-pointer border border-gray-200 bg-white" onClick={function() { setShowImagePreview(r.imageData); }} />
                         <p className="text-xs text-gray-400 mt-1 text-center">Toca para ampliar</p>
                       </div>
                     )}
-
                     <div className="p-5 space-y-0">
-                      {[
-                        ['Fecha', r.date],
-                        ['No Factura', r.invoiceNumber],
-                        ['Categoria', cat.emoji + ' ' + cat.name],
-                        ['IVA', fmt(r.taxAmount)],
-                        ['Base imponible', fmt(r.amount - r.taxAmount)],
-                        ['Descripcion', r.description],
-                      ].map(function(pair, i) {
+                      {[['Fecha', r.date], ['No Factura', r.invoiceNumber], ['Categoria', cat.emoji + ' ' + cat.name], ['IVA', fmt(r.taxAmount)], ['Base imponible', fmt(r.amount - r.taxAmount)], ['Descripcion', r.description]].map(function(pair, i) {
                         return (
                           <div key={i} className="flex justify-between py-2.5 border-b border-gray-50 last:border-0">
                             <span className="text-sm text-gray-500">{pair[0]}</span>
@@ -765,12 +696,8 @@ export default function App() {
                       })}
                     </div>
                     <div className="p-4 border-t border-gray-100 flex gap-2">
-                      <button onClick={function() { togglePaid(r.id); setSelectedReceipt(Object.assign({}, r, { paid: !r.paid })); }} className={'flex-1 py-2.5 rounded-xl text-sm font-medium ' + (r.paid ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200')}>
-                        {r.paid ? 'Marcar pendiente' : 'Marcar pagada'}
-                      </button>
-                      <button onClick={function() { deleteReceipt(r.id); }} className="px-4 py-2.5 bg-red-50 text-red-500 rounded-xl border border-red-200">
-                        <Trash2 size={16} />
-                      </button>
+                      <button onClick={function() { togglePaid(r.id); setSelectedReceipt(Object.assign({}, r, { paid: !r.paid })); }} className={'flex-1 py-2.5 rounded-xl text-sm font-medium ' + (r.paid ? 'bg-amber-50 text-amber-600 border border-amber-200' : 'bg-emerald-50 text-emerald-600 border border-emerald-200')}>{r.paid ? 'Marcar pendiente' : 'Marcar pagada'}</button>
+                      <button onClick={function() { deleteReceipt(r.id); }} className="px-4 py-2.5 bg-red-50 text-red-500 rounded-xl border border-red-200"><Trash2 size={16} /></button>
                     </div>
                   </div>
                 );
@@ -778,23 +705,17 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* ==================== REPORTS ==================== */}
           {view === 'reports' && (
             <motion.div key="reports" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-4">
               <h2 className="text-lg font-bold text-gray-800 mb-4">Informes</h2>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">Distribucion por Categoria</h3>
                 <ResponsiveContainer width="100%" height={200}>
-                  <RePieChart>
-                    <Pie data={stats.categoryTotals} cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={3} dataKey="total" nameKey="name">
-                      {stats.categoryTotals.map(function(e, i) { return <Cell key={i} fill={e.color} />; })}
-                    </Pie>
-                    <Tooltip formatter={function(v) { return [v.toFixed(2) + ' EUR', '']; }} />
-                  </RePieChart>
+                  <RePieChart><Pie data={stats.categoryTotals} cx="50%" cy="50%" innerRadius={45} outerRadius={80} paddingAngle={3} dataKey="total" nameKey="name">{stats.categoryTotals.map(function(e, i) { return <Cell key={i} fill={e.color} />; })}</Pie><Tooltip formatter={function(v) { return [v.toFixed(2) + ' EUR', '']; }} /></RePieChart>
                 </ResponsiveContainer>
                 <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1 justify-center">
-                  {stats.categoryTotals.map(function(c) {
-                    return <span key={c.id} className="flex items-center text-xs text-gray-600"><span className="w-2 h-2 rounded-full mr-1 inline-block" style={{ backgroundColor: c.color }} />{c.emoji} {c.name}</span>;
-                  })}
+                  {stats.categoryTotals.map(function(c) { return <span key={c.id} className="flex items-center text-xs text-gray-600"><span className="w-2 h-2 rounded-full mr-1 inline-block" style={{ backgroundColor: c.color }} />{c.emoji} {c.name}</span>; })}
                 </div>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mb-4">
@@ -805,9 +726,7 @@ export default function App() {
                     <XAxis type="number" tick={{ fontSize: 10 }} stroke="#9ca3af" />
                     <YAxis dataKey="emoji" type="category" tick={{ fontSize: 14 }} width={28} stroke="#9ca3af" />
                     <Tooltip formatter={function(v) { return [v.toFixed(2) + ' EUR', 'Total']; }} />
-                    <Bar dataKey="total" radius={4}>
-                      {stats.categoryTotals.map(function(e, i) { return <Cell key={i} fill={e.color} />; })}
-                    </Bar>
+                    <Bar dataKey="total" radius={4}>{stats.categoryTotals.map(function(e, i) { return <Cell key={i} fill={e.color} />; })}</Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -816,17 +735,8 @@ export default function App() {
                 {stats.categoryTotals.map(function(c) {
                   return (
                     <div key={c.id} className="flex items-center justify-between py-2.5 border-b border-gray-50 last:border-0">
-                      <div className="flex items-center">
-                        <span className="text-base mr-2">{c.emoji}</span>
-                        <div>
-                          <p className="text-sm font-medium text-gray-700">{c.name}</p>
-                          <p className="text-xs text-gray-400">{c.count} factura{c.count !== 1 ? 's' : ''}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-bold text-gray-800">{fmt(c.total)}</p>
-                        <p className="text-xs text-gray-400">{((c.total / stats.total) * 100).toFixed(1)}%</p>
-                      </div>
+                      <div className="flex items-center"><span className="text-base mr-2">{c.emoji}</span><div><p className="text-sm font-medium text-gray-700">{c.name}</p><p className="text-xs text-gray-400">{c.count} factura{c.count !== 1 ? 's' : ''}</p></div></div>
+                      <div className="text-right"><p className="text-sm font-bold text-gray-800">{fmt(c.total)}</p><p className="text-xs text-gray-400">{((c.total / stats.total) * 100).toFixed(1)}%</p></div>
                     </div>
                   );
                 })}
@@ -851,6 +761,7 @@ export default function App() {
             </motion.div>
           )}
 
+          {/* ==================== EXPORT ==================== */}
           {view === 'export' && (
             <motion.div key="export" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 py-4">
               <h2 className="text-lg font-bold text-gray-800 mb-1">Exportar</h2>
@@ -864,17 +775,14 @@ export default function App() {
                 <div><h3 className="font-semibold text-gray-800">Exportar PDF</h3><p className="text-xs text-gray-500 mt-0.5">Informe formateado para imprimir</p></div>
               </motion.button>
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 mt-5">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3">Vista Previa del Informe</h3>
-                <p className="text-xs text-gray-500 mb-3">Se exportaran {filteredReceipts.length} facturas</p>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Vista Previa</h3>
                 <div className="bg-gray-50 rounded-xl p-3.5 space-y-2">
                   {[
                     ['Total facturas', String(filteredReceipts.length)],
                     ['Importe total', fmt(filteredReceipts.reduce(function(s, r) { return s + r.amount; }, 0))],
                     ['IVA total', fmt(filteredReceipts.reduce(function(s, r) { return s + r.taxAmount; }, 0))],
                     ['Base imponible', fmt(filteredReceipts.reduce(function(s, r) { return s + (r.amount - r.taxAmount); }, 0))],
-                  ].map(function(pair, i) {
-                    return <div key={i} className="flex justify-between text-xs"><span className="text-gray-500">{pair[0]}</span><span className="font-bold text-gray-800">{pair[1]}</span></div>;
-                  })}
+                  ].map(function(pair, i) { return <div key={i} className="flex justify-between text-xs"><span className="text-gray-500">{pair[0]}</span><span className="font-bold text-gray-800">{pair[1]}</span></div>; })}
                 </div>
               </div>
             </motion.div>
@@ -895,12 +803,8 @@ export default function App() {
             return (
               <button key={tab.id} onClick={function() { navTo(tab.id); }} className={'flex flex-col items-center px-2 py-1 transition-colors ' + (view === tab.id ? 'text-indigo-600' : 'text-gray-400')}>
                 {tab.special ? (
-                  <div className={'p-2.5 rounded-full -mt-6 shadow-lg transition-colors text-white ' + (view === tab.id ? 'bg-indigo-600' : 'bg-indigo-500')}>
-                    <tab.icon size={20} />
-                  </div>
-                ) : (
-                  <tab.icon size={20} />
-                )}
+                  <div className={'p-2.5 rounded-full -mt-6 shadow-lg transition-colors text-white ' + (view === tab.id ? 'bg-indigo-600' : 'bg-indigo-500')}><tab.icon size={20} /></div>
+                ) : (<tab.icon size={20} />)}
                 <span className="text-xs mt-1 font-medium">{tab.label}</span>
               </button>
             );

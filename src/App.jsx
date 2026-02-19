@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { createWorker } from 'tesseract.js';
 import { fbLoadReceipts, fbSaveReceipt, fbUpdateReceipt, fbDeleteReceipt } from './firebase';
-
+ 
 /* ===== CONSTANTES ===== */
 var CATEGORIES = [
   { id: 'food', name: 'Comida', emoji: '🍽️', color: '#f97316' },
